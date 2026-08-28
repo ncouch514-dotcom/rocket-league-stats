@@ -426,7 +426,24 @@ st.markdown(
         .main-title { font-size: 2rem !important; }
         .subtitle { font-size: 0.95rem !important; }
         .card-grid-3 { grid-template-columns: 1fr !important; }
-        .live-desk-text { font-size: 0.85rem !important; }
+        
+        /* FIX FOR SHUFFLE FEED WRAPPING */
+        .live-desk-text { 
+            font-size: 0.85rem !important; 
+            white-space: normal !important; 
+            overflow: visible !important;
+            line-height: 1.4 !important;
+        }
+        .live-ticker-box-connected {
+            height: auto !important; 
+            min-height: 48px !important;
+            padding: 10px 14px !important;
+        }
+        div[data-testid="stHorizontalBlock"]:has(.live-ticker-box-connected) .stButton > button {
+            height: 100% !important;
+            min-height: 100% !important;
+        }
+        
         .stTabs [data-baseweb="tab-list"] { flex-direction: row !important; }
         .stTabs [data-baseweb="tab"] { flex: 1 1 45% !important; font-size: 0.8rem !important; }
         
@@ -1030,8 +1047,8 @@ def generate_player_card_html(
         second_count = 0
         third_count = 0
 
-    font_tag_size = "1.15rem" if compiled_single_column else "1.5rem"
-    score_badge_font = "0.72rem" if compiled_single_column else "0.8rem"
+    font_tag_size = "0.95rem" if compiled_single_column else "1.5rem"
+    score_badge_font = "0.65rem" if compiled_single_column else "0.8rem"
 
     if compiled_single_column:
         body_content = f"""<div class="card-stat-box" style="width: 100%;">
@@ -1473,11 +1490,11 @@ with tab_stackup:
     render_download_image_button("#stack-up-export", "stack_up_overview.jpeg")
 
     export_html = f"""
-    <div id="stack-up-export" style="background: transparent; padding: 20px; width: 100%;">
-        <div class="stack-up-grid" style="display: flex; flex-wrap: nowrap; justify-content: space-between; gap: 15px; width: 100%;">
-            <div style="flex: 1 1 0; min-width: 0;">{generate_player_card_html("Nic", filtered_df, score_quota, compiled_single_column=True)}</div>
-            <div style="flex: 1 1 0; min-width: 0;">{generate_player_card_html("Aryan", filtered_df, score_quota, compiled_single_column=True)}</div>
-            <div style="flex: 1 1 0; min-width: 0;">{generate_player_card_html("Dillan", filtered_df, score_quota, compiled_single_column=True)}</div>
+    <div id="stack-up-export" style="background: transparent; padding: 10px; width: 100%;">
+        <div class="stack-up-grid" style="display: flex; flex-direction: row; justify-content: center; gap: 12px; width: 100%;">
+            <div style="flex: 1; min-width: 0; max-width: 32%;">{generate_player_card_html("Nic", filtered_df, score_quota, compiled_single_column=True)}</div>
+            <div style="flex: 1; min-width: 0; max-width: 32%;">{generate_player_card_html("Aryan", filtered_df, score_quota, compiled_single_column=True)}</div>
+            <div style="flex: 1; min-width: 0; max-width: 32%;">{generate_player_card_html("Dillan", filtered_df, score_quota, compiled_single_column=True)}</div>
         </div>
     </div>
     """
