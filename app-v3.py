@@ -271,7 +271,11 @@ st.markdown(
         font-weight: 900;
     }
 
-    /* FEATURED HEADLINE CARD */
+    /* FEATURED HEADLINE CARD (FIXED FOR MOBILE WEBKIT) */
+    @-webkit-keyframes rotate-led-strip {
+        0% { -webkit-transform: translate(-50%, -50%) rotate(0deg); }
+        100% { -webkit-transform: translate(-50%, -50%) rotate(360deg); }
+    }
     @keyframes rotate-led-strip {
         0% { transform: translate(-50%, -50%) rotate(0deg); }
         100% { transform: translate(-50%, -50%) rotate(360deg); }
@@ -293,8 +297,8 @@ st.markdown(
         position: absolute;
         top: 50%;
         left: 50%;
-        width: 200%;
-        height: 400%;
+        width: 300%;
+        height: 300%;
         background: conic-gradient(
             from 0deg,
             #CCFF00 0deg,
@@ -303,10 +307,14 @@ st.markdown(
             #FF9100 270deg,
             #CCFF00 360deg
         );
+        -webkit-animation: rotate-led-strip 4.5s linear infinite;
         animation: rotate-led-strip 4.5s linear infinite;
         z-index: -2;
+        -webkit-transform: translate(-50%, -50%);
         transform: translate(-50%, -50%);
+        -webkit-filter: blur(12px);
         filter: blur(12px);
+        will-change: transform;
     }
 
     .featured-headline-card::after {
@@ -430,18 +438,31 @@ st.markdown(
         .stTabs [data-baseweb="tab"] { flex: 1 1 45% !important; font-size: 0.8rem !important; }
         
         /* SHUFFLE FEED MOBILE WRAP FIX */
+        div[data-testid="stHorizontalBlock"]:has(.live-ticker-box-connected) {
+            flex-direction: column !important;
+            height: auto !important;
+        }
+        
+        div[data-testid="stHorizontalBlock"]:has(.live-ticker-box-connected) .stButton > button {
+            border-right: none !important;
+            border-bottom: 1.5px solid rgba(0, 163, 255, 0.5) !important;
+        }
+
         .live-ticker-box-connected {
             height: auto !important;
-            min-height: 48px;
-            padding: 10px !important;
+            min-height: 60px !important;
+            padding: 16px 12px !important;
         }
+        
         .live-desk-text { 
             font-size: 0.85rem !important; 
             white-space: normal !important;
+            word-wrap: break-word !important;
             overflow: visible !important;
-            text-overflow: clip !important;
-            line-height: 1.3 !important;
+            line-height: 1.4 !important;
+            padding-bottom: 4px !important;
         }
+        
         div[data-testid="stHorizontalBlock"]:has(.live-ticker-box-connected) .stButton > button {
             height: 100% !important;
             min-height: 48px !important;
