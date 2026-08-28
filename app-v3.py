@@ -426,31 +426,69 @@ st.markdown(
         .main-title { font-size: 2rem !important; }
         .subtitle { font-size: 0.95rem !important; }
         .card-grid-3 { grid-template-columns: 1fr !important; }
-        
-        /* FIX FOR SHUFFLE FEED WRAPPING */
-        .live-desk-text { 
-            font-size: 0.85rem !important; 
-            white-space: normal !important; 
-            overflow: visible !important;
-            line-height: 1.4 !important;
-        }
-        .live-ticker-box-connected {
-            height: auto !important; 
-            min-height: 48px !important;
-            padding: 10px 14px !important;
-        }
-        div[data-testid="stHorizontalBlock"]:has(.live-ticker-box-connected) .stButton > button {
-            height: 100% !important;
-            min-height: 100% !important;
-        }
-        
         .stTabs [data-baseweb="tab-list"] { flex-direction: row !important; }
         .stTabs [data-baseweb="tab"] { flex: 1 1 45% !important; font-size: 0.8rem !important; }
         
-        /* FIX FOR THE STACK UP TAB ON MOBILE */
+        /* SHUFFLE FEED MOBILE WRAP FIX */
+        .live-ticker-box-connected {
+            height: auto !important;
+            min-height: 48px;
+            padding: 10px !important;
+        }
+        .live-desk-text { 
+            font-size: 0.85rem !important; 
+            white-space: normal !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
+            line-height: 1.3 !important;
+        }
+        div[data-testid="stHorizontalBlock"]:has(.live-ticker-box-connected) .stButton > button {
+            height: 100% !important;
+            min-height: 48px !important;
+        }
+
+        /* FIX FOR THE STACK UP TAB ON MOBILE (SIDE-BY-SIDE + SHRINK TO FIT) */
         .stack-up-grid {
+            flex-direction: row !important;
+            gap: 6px !important;
+        }
+        .stack-up-grid .player-card-container {
+            padding: 8px !important;
+            border-radius: 12px !important;
+        }
+        .stack-up-grid .player-avatar-badge {
+            width: 28px !important;
+            height: 28px !important;
+            font-size: 1rem !important;
+        }
+        .stack-up-grid .player-identity {
             flex-direction: column !important;
-            gap: 20px !important;
+            align-items: flex-start !important;
+            gap: 4px !important;
+        }
+        .stack-up-grid .player-card-gamertag {
+            font-size: 0.65rem !important;
+        }
+        .stack-up-grid .player-card-role {
+            font-size: 0.55rem !important;
+        }
+        .stack-up-grid .box-title {
+            font-size: 0.6rem !important;
+            margin-bottom: 6px !important;
+        }
+        .stack-up-grid .stat-lbl {
+            font-size: 0.5rem !important;
+        }
+        .stack-up-grid .stat-v-sum, .stack-up-grid .stat-v-gold, .stack-up-grid .stat-v-red {
+            font-size: 0.6rem !important;
+        }
+        .stack-up-grid .stat-v-avg {
+            font-size: 0.5rem !important;
+        }
+        /* Scale down the points pill to fit better on mobile */
+        .stack-up-grid span[style*="background: rgba(255, 215, 0, 0.15)"] {
+            font-size: 0.55rem !important;
+            padding: 2px 4px !important;
         }
     }
 </style>
@@ -1047,8 +1085,8 @@ def generate_player_card_html(
         second_count = 0
         third_count = 0
 
-    font_tag_size = "0.95rem" if compiled_single_column else "1.5rem"
-    score_badge_font = "0.65rem" if compiled_single_column else "0.8rem"
+    font_tag_size = "1.15rem" if compiled_single_column else "1.5rem"
+    score_badge_font = "0.72rem" if compiled_single_column else "0.8rem"
 
     if compiled_single_column:
         body_content = f"""<div class="card-stat-box" style="width: 100%;">
@@ -1490,11 +1528,11 @@ with tab_stackup:
     render_download_image_button("#stack-up-export", "stack_up_overview.jpeg")
 
     export_html = f"""
-    <div id="stack-up-export" style="background: transparent; padding: 10px; width: 100%;">
-        <div class="stack-up-grid" style="display: flex; flex-direction: row; justify-content: center; gap: 12px; width: 100%;">
-            <div style="flex: 1; min-width: 0; max-width: 32%;">{generate_player_card_html("Nic", filtered_df, score_quota, compiled_single_column=True)}</div>
-            <div style="flex: 1; min-width: 0; max-width: 32%;">{generate_player_card_html("Aryan", filtered_df, score_quota, compiled_single_column=True)}</div>
-            <div style="flex: 1; min-width: 0; max-width: 32%;">{generate_player_card_html("Dillan", filtered_df, score_quota, compiled_single_column=True)}</div>
+    <div id="stack-up-export" style="background: transparent; padding: 20px; width: 100%;">
+        <div class="stack-up-grid" style="display: flex; flex-wrap: nowrap; justify-content: space-between; gap: 15px; width: 100%;">
+            <div style="flex: 1 1 0; min-width: 0;">{generate_player_card_html("Nic", filtered_df, score_quota, compiled_single_column=True)}</div>
+            <div style="flex: 1 1 0; min-width: 0;">{generate_player_card_html("Aryan", filtered_df, score_quota, compiled_single_column=True)}</div>
+            <div style="flex: 1 1 0; min-width: 0;">{generate_player_card_html("Dillan", filtered_df, score_quota, compiled_single_column=True)}</div>
         </div>
     </div>
     """
