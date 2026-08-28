@@ -429,6 +429,12 @@ st.markdown(
         .live-desk-text { font-size: 0.85rem !important; }
         .stTabs [data-baseweb="tab-list"] { flex-direction: row !important; }
         .stTabs [data-baseweb="tab"] { flex: 1 1 45% !important; font-size: 0.8rem !important; }
+        
+        /* FIX FOR THE STACK UP TAB ON MOBILE */
+        .stack-up-grid {
+            flex-direction: column !important;
+            gap: 20px !important;
+        }
     }
 </style>
 """,
@@ -1468,7 +1474,7 @@ with tab_stackup:
 
     export_html = f"""
     <div id="stack-up-export" style="background: transparent; padding: 20px; width: 100%;">
-        <div style="display: flex; flex-wrap: nowrap; justify-content: space-between; gap: 15px; width: 100%;">
+        <div class="stack-up-grid" style="display: flex; flex-wrap: nowrap; justify-content: space-between; gap: 15px; width: 100%;">
             <div style="flex: 1 1 0; min-width: 0;">{generate_player_card_html("Nic", filtered_df, score_quota, compiled_single_column=True)}</div>
             <div style="flex: 1 1 0; min-width: 0;">{generate_player_card_html("Aryan", filtered_df, score_quota, compiled_single_column=True)}</div>
             <div style="flex: 1 1 0; min-width: 0;">{generate_player_card_html("Dillan", filtered_df, score_quota, compiled_single_column=True)}</div>
