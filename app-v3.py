@@ -39,35 +39,51 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Custom Styling & CSS with Mobile/Tablet Responsive Enhancements & Light/Dark Mode Support
+# Custom Styling & CSS with Mobile/Tablet Responsive Enhancements & Permanent Dark Mode Support
 st.markdown(
     """
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700;900&family=Inter:wght@400;600;700&display=swap');
 
-    /* Force default color scheme support for light/dark mode toggling */
+    /* FORCE PERMANENT DARK MODE */
     :root {
-        color-scheme: dark light;
+        color-scheme: dark !important;
+        --background-color: #0b111a;
+        --secondary-background-color: rgba(15, 23, 42, 0.6);
+        --text-color: #ffffff;
     }
 
-    .stApp {
+    [data-testid="stAppViewContainer"], .stApp {
+        background-color: var(--background-color) !important;
+        color: var(--text-color) !important;
         font-family: 'Inter', sans-serif;
+    }
+
+    [data-testid="stSidebar"] {
+        background-color: #0f172a !important;
+        border-right: 1px solid rgba(128,128,128,0.2) !important;
+    }
+
+    [data-testid="stHeader"] {
+        background-color: transparent !important;
     }
 
     .main-title, .sidebar-title, .player-card-gamertag, .box-title, .sidebar-stat-value, .story-header-text {
         font-family: 'Rajdhani', sans-serif !important;
         text-transform: uppercase;
+        color: var(--text-color);
     }
     
     .story-body-text, .stat-lbl {
         font-family: 'Inter', sans-serif;
+        color: var(--text-color);
     }
     
-    /* GLASSMORPHISM CARDS - Adapted for Light/Dark */
+    /* GLASSMORPHISM CARDS */
     .player-card-container, 
     .sidebar-control-card, 
     div[data-testid="stColumn"]:has([class*="card-border-"]) {
-        background: var(--secondary-background-color, rgba(15, 23, 42, 0.6)) !important;
+        background: var(--secondary-background-color) !important;
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
         border: 1px solid rgba(128, 128, 128, 0.2) !important;
@@ -84,7 +100,6 @@ st.markdown(
     .sidebar-title {
         font-size: 1.2rem;
         font-weight: 900;
-        color: var(--text-color);
         letter-spacing: 1px;
         margin: 0;
     }
@@ -104,7 +119,7 @@ st.markdown(
         display: flex !important;
         width: 100% !important;
         gap: 8px !important;
-        background: var(--secondary-background-color, rgba(10, 16, 26, 0.85)) !important;
+        background: rgba(10, 16, 26, 0.85) !important;
         backdrop-filter: blur(16px) !important;
         -webkit-backdrop-filter: blur(16px) !important;
         padding: 8px !important;
@@ -163,7 +178,7 @@ st.markdown(
     
     /* Header Banner */
     .title-banner {
-        background: linear-gradient(135deg, #00A3FF 0%, var(--background-color, #0b111a) 50%, #FF6B00 100%);
+        background: linear-gradient(135deg, #00A3FF 0%, var(--background-color) 50%, #FF6B00 100%);
         padding: 1.8rem;
         border-radius: 12px;
         text-align: center;
@@ -174,7 +189,7 @@ st.markdown(
     .main-title {
         font-size: 3rem;
         font-weight: 900;
-        color: #FFFFFF; /* Kept white for banner gradient contrast */
+        color: #FFFFFF !important; 
         letter-spacing: 2px;
         margin: 0;
         text-shadow: 0 0 20px rgba(0, 163, 255, 0.6), 2px 2px 8px rgba(0,0,0,0.5);
@@ -255,7 +270,6 @@ st.markdown(
     }
 
     .live-desk-text {
-        color: var(--text-color) !important;
         font-weight: 800;
         letter-spacing: 0.3px;
         line-height: 1.1;
@@ -271,7 +285,7 @@ st.markdown(
         font-weight: 900;
     }
 
-    /* FEATURED HEADLINE CARD (FIXED FOR MOBILE WEBKIT) */
+    /* FEATURED HEADLINE CARD */
     @-webkit-keyframes rotate-led-strip {
         0% { -webkit-transform: translate(-50%, -50%) rotate(0deg); }
         100% { -webkit-transform: translate(-50%, -50%) rotate(360deg); }
@@ -321,7 +335,7 @@ st.markdown(
         content: '';
         position: absolute;
         inset: 3px;
-        background: var(--background-color, #090e17);
+        background: var(--background-color);
         border-radius: 13px;
         z-index: -1;
     }
@@ -346,12 +360,10 @@ st.markdown(
     .story-header-text {
         font-size: 1.3rem;
         font-weight: 900;
-        color: var(--text-color);
         margin-top: 8px;
         margin-bottom: 4px;
     }
     .story-body-text {
-        color: var(--text-color);
         opacity: 0.85;
         font-size: 0.9rem;
         line-height: 1.4;
@@ -392,8 +404,8 @@ st.markdown(
         flex-shrink: 0;
         font-family: 'Rajdhani', sans-serif !important;
     }
-    .player-card-gamertag { font-weight: 900; color: var(--text-color); line-height: 1.1; }
-    .player-card-role { font-size: 0.78rem; font-weight: 800; color: var(--text-color); opacity: 0.7; }
+    .player-card-gamertag { font-weight: 900; line-height: 1.1; }
+    .player-card-role { font-size: 0.78rem; font-weight: 800; opacity: 0.7; }
 
     /* RESPONSIVE GRID SYSTEM & MEDIA QUERIES */
     .card-grid-3 {
@@ -404,7 +416,7 @@ st.markdown(
         margin-bottom: 8px !important;
     }
     .card-stat-box {
-        background: var(--secondary-background-color, rgba(15, 23, 42, 0.75)) !important;
+        background: var(--secondary-background-color) !important;
         border: 1px solid rgba(128, 128, 128, 0.2) !important;
         border-radius: 12px !important;
         padding: 12px !important;
@@ -424,8 +436,8 @@ st.markdown(
         align-items: center !important;
         margin-bottom: 6px;
     }
-    .stat-lbl { font-size: 0.78rem; font-weight: 700; color: var(--text-color); opacity: 0.7; }
-    .stat-v-sum { font-size: 0.88rem; font-weight: 900; color: var(--text-color); }
+    .stat-lbl { font-size: 0.78rem; font-weight: 700; opacity: 0.7; }
+    .stat-v-sum { font-size: 0.88rem; font-weight: 900; }
     .stat-v-avg { font-size: 0.8rem; font-weight: 800; color: #38bdf8; }
     .stat-v-gold { font-size: 0.88rem; font-weight: 900; color: #ffd700; }
     .stat-v-red { font-size: 0.88rem; font-weight: 900; color: #ef4444; }
@@ -437,15 +449,25 @@ st.markdown(
         .stTabs [data-baseweb="tab-list"] { flex-direction: row !important; }
         .stTabs [data-baseweb="tab"] { flex: 1 1 45% !important; font-size: 0.8rem !important; }
         
-        /* SHUFFLE FEED MOBILE WRAP FIX */
+        /* SHUFFLE FEED MOBILE WRAP FIX - BORDER FILL */
         div[data-testid="stHorizontalBlock"]:has(.live-ticker-box-connected) {
             flex-direction: column !important;
             height: auto !important;
+            padding: 0 !important;
+        }
+        
+        div[data-testid="stHorizontalBlock"]:has(.live-ticker-box-connected) div[data-testid="stColumn"] {
+            width: 100% !important;
+            min-width: 100% !important;
         }
         
         div[data-testid="stHorizontalBlock"]:has(.live-ticker-box-connected) .stButton > button {
             border-right: none !important;
-            border-bottom: 1.5px solid rgba(0, 163, 255, 0.5) !important;
+            border-bottom: 1.5px solid #00A3FF !important;
+            border-radius: 9px 9px 0 0 !important; /* Fits perfectly inside the rounded border wrapper */
+            width: 100% !important;
+            height: 100% !important;
+            min-height: 48px !important;
         }
 
         .live-ticker-box-connected {
@@ -462,13 +484,8 @@ st.markdown(
             line-height: 1.4 !important;
             padding-bottom: 4px !important;
         }
-        
-        div[data-testid="stHorizontalBlock"]:has(.live-ticker-box-connected) .stButton > button {
-            height: 100% !important;
-            min-height: 48px !important;
-        }
 
-        /* FIX FOR THE STACK UP TAB ON MOBILE (SIDE-BY-SIDE + SHRINK TO FIT) */
+        /* FIX FOR THE STACK UP TAB ON MOBILE */
         .stack-up-grid {
             flex-direction: row !important;
             gap: 6px !important;
@@ -535,7 +552,6 @@ def apply_balanced_chart_theme(fig):
             font_color="#FFFFFF",
             bordercolor="rgba(255,255,255,0.1)",
         ),
-        margin=dict(l=20, r=20, t=35, b=20),
         showlegend=False,
     )
     return fig
@@ -736,7 +752,7 @@ if not df.empty:
     
     st.sidebar.markdown(
         f"""
-        <div style="background: var(--secondary-background-color, rgba(15, 23, 42, 0.6)); padding: 12px; border-radius: 8px; border: 1px solid rgba(128,128,128,0.2); margin-top: 10px;">
+        <div style="background: var(--secondary-background-color); padding: 12px; border-radius: 8px; border: 1px solid rgba(128,128,128,0.2); margin-top: 10px;">
             <div style="color: #38bdf8; font-size: 0.8rem; font-weight: 900; text-transform: uppercase; margin-bottom: 8px;">Live Calculations</div>
             <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
                 <span style="color: var(--text-color); opacity: 0.7; font-size: 0.8rem;">Active Games:</span>
@@ -1331,7 +1347,7 @@ def render_player_tab(player_key, df_data, target_quota):
         ),
         template="plotly_dark",
         height=450,
-        margin=dict(l=60, r=60, t=20, b=30),
+        margin=dict(l=35, r=35, t=30, b=30), # Reduced horizontal margin to fit mobile better
     )
     fig_p_radar = apply_balanced_chart_theme(fig_p_radar)
     st.plotly_chart(
@@ -1417,10 +1433,10 @@ with tab_news:
                          padding: 4px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: 900; letter-spacing: 1px;">
                 FEATURED HEADLINE
             </span>
-            <div style="font-size: 1.8rem; font-weight: 900; color: var(--text-color); margin-top: 10px; margin-bottom: 6px; font-family: 'Rajdhani', sans-serif;">
+            <div style="font-size: 1.8rem; font-weight: 900; margin-top: 10px; margin-bottom: 6px; font-family: 'Rajdhani', sans-serif;">
                 {featured_title}
             </div>
-            <div style="color: var(--text-color); opacity: 0.85; font-size: 1rem; line-height: 1.5;">
+            <div style="opacity: 0.85; font-size: 1rem; line-height: 1.5;">
                 {featured_desc}
             </div>
         </div>
@@ -1561,18 +1577,18 @@ with tab_stackup:
 
     st.markdown(
         """
-        <div style="display: flex; justify-content: center; align-items: center; gap: 28px; background: var(--secondary-background-color, rgba(15, 23, 42, 0.75)); border: 1px solid rgba(128, 128, 128, 0.2); border-radius: 12px; padding: 10px 20px; margin-top: 10px; margin-bottom: 25px; max-width: 650px; margin-left: auto; margin-right: auto; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+        <div style="display: flex; justify-content: center; align-items: center; gap: 28px; background: var(--secondary-background-color); border: 1px solid rgba(128, 128, 128, 0.2); border-radius: 12px; padding: 10px 20px; margin-top: 10px; margin-bottom: 25px; max-width: 650px; margin-left: auto; margin-right: auto; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
             <div style="display: flex; align-items: center; gap: 8px;">
                 <div style="width: 14px; height: 14px; border-radius: 50%; background-color: #00F0FF; box-shadow: 0 0 8px #00F0FF;"></div>
-                <span style="color: var(--text-color); font-weight: 800; font-size: 0.9rem;">Hughligan</span>
+                <span style="font-weight: 800; font-size: 0.9rem;">Hughligan</span>
             </div>
             <div style="display: flex; align-items: center; gap: 8px;">
                 <div style="width: 14px; height: 14px; border-radius: 50%; background-color: #FF003F; box-shadow: 0 0 8px #FF003F;"></div>
-                <span style="color: var(--text-color); font-weight: 800; font-size: 0.9rem;">ShaggNazty5480</span>
+                <span style="font-weight: 800; font-size: 0.9rem;">ShaggNazty5480</span>
             </div>
             <div style="display: flex; align-items: center; gap: 8px;">
                 <div style="width: 14px; height: 14px; border-radius: 50%; background-color: #BF00FF; box-shadow: 0 0 8px #BF00FF;"></div>
-                <span style="color: var(--text-color); font-weight: 800; font-size: 0.9rem;">Shagnasty37</span>
+                <span style="font-weight: 800; font-size: 0.9rem;">Shagnasty37</span>
             </div>
         </div>
         """,
@@ -1654,7 +1670,7 @@ with tab_stackup:
         showlegend=False,
         template="plotly_dark",
         height=520,
-        margin=dict(l=60, r=60, t=50, b=50),
+        margin=dict(l=35, r=35, t=40, b=40), # Reduced horizontal margins for better mobile scaling
     )
     fig_indiv_radar = apply_balanced_chart_theme(fig_indiv_radar)
 
@@ -1764,7 +1780,7 @@ with tab_team:
         showlegend=False,
         template="plotly_dark",
         height=520,
-        margin=dict(l=60, r=60, t=50, b=50),
+        margin=dict(l=35, r=35, t=40, b=40), # Reduced horizontal margins for mobile
     )
     fig_team_radar = apply_balanced_chart_theme(fig_team_radar)
 
