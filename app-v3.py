@@ -14,74 +14,84 @@ def clean_and_normalize_dataframe(df):
         return df
 
     # --- ADVANCED PARSING: Handle 2-row multi-headers (Original Excel Format) ---
-    # The original file has player gamertags as column names and stats in row index 0.
-    gamertags = ["Hughligan", "ShaggNazty5480", "ShagNasty37", "shagnasty37", "shaggnazty5480", "hughligan"]
-    if any(tag.lower() in [str(c).strip().lower() for c in df.columns] for tag in gamertags):
+    gamertags = [
+        "Hughligan",
+        "ShaggNazty5480",
+        "ShagNasty37",
+        "shagnasty37",
+        "shaggnazty5480",
+        "hughligan",
+    ]
+    if any(
+        tag.lower() in [str(c).strip().lower() for c in df.columns]
+        for tag in gamertags
+    ):
         new_columns = []
         current_player = None
-        
+
         player_map = {
-            "hughligan": "Nic", 
-            "shaggnazty5480": "Aryan", 
-            "shagnasty37": "Dillan"
+            "hughligan": "Nic",
+            "shaggnazty5480": "Aryan",
+            "shagnasty37": "Dillan",
         }
-        
-        for col in df.columns:
+
+        # Use integer indexing to safely handle potential duplicate column names
+        for i, col in enumerate(df.columns):
             col_str = str(col).strip()
-            
-            # If the column name matches a known gamertag, update our active player focus
+
             if col_str.lower() in player_map:
                 current_player = player_map[col_str.lower()]
-            
-            # Check row 0 to see what stat this column is actually holding
-            stat_val = str(df.iloc[0][col]).strip() if pd.notna(df.iloc[0][col]) else ""
-            
+
+            raw_val = df.iloc[0, i]
+            stat_val = str(raw_val).strip() if pd.notna(raw_val) else ""
+
             if current_player and stat_val and stat_val.lower() != "nan":
-                # Create the target format like "Nic_Score"
-                if stat_val.lower() == 'win' and "Win" not in new_columns:
+                if stat_val.lower() == "win" and "Win" not in new_columns:
                     new_columns.append("Win")
-                elif stat_val.lower() in ['lose', 'ff victory', 'placements', 'day', 'game', 'win']:
+                elif stat_val.lower() in [
+                    "lose",
+                    "ff victory",
+                    "placements",
+                    "day",
+                    "game",
+                    "win",
+                ]:
                     new_columns.append(f"{current_player}_{stat_val}")
                 else:
                     new_columns.append(f"{current_player}_{stat_val.capitalize()}")
             else:
                 new_columns.append(col_str)
-                
-        # If we successfully parsed player stats, apply them and drop the old header row
+
         if any("_Score" in c or "_Goals" in c for c in new_columns):
             df.columns = new_columns
             df = df.drop(index=0).reset_index(drop=True)
     # --- END ADVANCED PARSING ---
 
-    # Ensure column names are strings and strip whitespace
     df.columns = [str(c).strip() for c in df.columns]
 
     mapping = {}
-    
-    # Extended aliases to catch flattened files that use Gamertags instead of real names
     player_aliases = {
-        "nic": "Nic", "hughligan": "Nic",
-        "aryan": "Aryan", "shaggnazty5480": "Aryan",
-        "dillan": "Dillan", "shagnasty37": "Dillan"
+        "nic": "Nic",
+        "hughligan": "Nic",
+        "aryan": "Aryan",
+        "shaggnazty5480": "Aryan",
+        "dillan": "Dillan",
+        "shagnasty37": "Dillan",
     }
     stats = ["score", "goals", "assists", "saves", "shots"]
 
     for col in df.columns:
         c_norm = re.sub(r"[\s_\-\.]+", "_", col.strip()).lower()
 
-        # Check Win mapping
         if c_norm in ["win", "wins", "result", "outcome", "w_l", "w/l"]:
-            # Only map if we don't already have a Win column
             if "Win" not in mapping.values() and "Win" not in df.columns:
                 mapping[col] = "Win"
             continue
 
-        # Check Player Stat mappings
         matched = False
         for alias, target_player in player_aliases.items():
             for s in stats:
                 target = f"{target_player}_{s.capitalize()}"
-                # Handle variations: hughligan_score, hughliganscore, score_nic
                 if c_norm in [f"{alias}_{s}", f"{alias}{s}", f"{s}_{alias}"]:
                     mapping[col] = target
                     matched = True
@@ -92,7 +102,6 @@ def clean_and_normalize_dataframe(df):
     if mapping:
         df = df.rename(columns=mapping)
 
-    # Normalize Win column values
     if "Win" in df.columns:
 
         def parse_win(val):
@@ -105,22 +114,17 @@ def clean_and_normalize_dataframe(df):
 
         df["Win"] = df["Win"].apply(parse_win)
 
-    # Convert numeric columns safely
     for col in df.columns:
         if col != "Source_Session":
             if df[col].dtype == object:
                 df[col] = (
-                    df[col]
-                    .astype(str)
-                    .str.replace(",", "")
-                    .str.strip()
+                    df[col].astype(str).str.replace(",", "").str.strip()
                 )
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
     return df
 
 
-# Dynamic font size helper based on character count
 def get_dynamic_font_size(text):
     clean_text = re.sub(r"<[^<]+?>", "", text)
     length = len(clean_text)
@@ -137,7 +141,6 @@ def get_dynamic_font_size(text):
         return "1.45rem"
 
 
-# Helper to convert hex colors to RGBA for Plotly overlays
 def hex_to_rgba(hex_str, alpha=0.2):
     hex_str = hex_str.lstrip("#")
     r, g, b = tuple(int(hex_str[i : i + 2], 16) for i in (0, 2, 4))
@@ -157,7 +160,6 @@ st.markdown(
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700;900&family=Inter:wght@400;600;700&display=swap');
 
-    /* FORCE PERMANENT DARK MODE */
     :root {
         color-scheme: dark !important;
         --background-color: #0b111a;
@@ -191,7 +193,6 @@ st.markdown(
         color: var(--text-color);
     }
     
-    /* GLASSMORPHISM CARDS */
     .player-card-container, 
     .sidebar-control-card, 
     div[data-testid="stColumn"]:has([class*="card-border-"]) {
@@ -201,7 +202,6 @@ st.markdown(
         border: 1px solid rgba(128, 128, 128, 0.2) !important;
     }
 
-    /* Sidebar Styling */
     .sidebar-control-card {
         border-left: 4px solid #00A3FF !important;
         padding: 14px 16px;
@@ -222,7 +222,6 @@ st.markdown(
         font-weight: 500;
     }
 
-    /* OVERHAULED FLOATING NEON PILL TAB BAR */
     div[data-testid="stTabs"] {
         width: 100% !important;
     }
@@ -288,7 +287,6 @@ st.markdown(
         display: none !important;
     }
     
-    /* Header Banner */
     .title-banner {
         background: linear-gradient(135deg, #00A3FF 0%, var(--background-color) 50%, #FF6B00 100%);
         padding: 1.8rem;
@@ -314,7 +312,6 @@ st.markdown(
         letter-spacing: 1px;
     }
 
-    /* UNIFIED CONNECTED FEED BAR OVERRIDES */
     div[data-testid="stHorizontalBlock"]:has(.live-ticker-box-connected) {
         gap: 0 !important;
         align-items: stretch !important;
@@ -337,7 +334,6 @@ st.markdown(
         padding: 0 !important;
     }
 
-    /* STYLED SHUFFLE BUTTON */
     div[data-testid="stHorizontalBlock"]:has(.live-ticker-box-connected) .stButton {
         height: 100% !important;
     }
@@ -368,7 +364,6 @@ st.markdown(
         letter-spacing: 2px !important;
     }
 
-    /* CONNECTED TICKER BOX */
     .live-ticker-box-connected {
         background: transparent !important;
         border: none !important;
@@ -397,7 +392,6 @@ st.markdown(
         font-weight: 900;
     }
 
-    /* FEATURED HEADLINE CARD */
     @-webkit-keyframes rotate-led-strip {
         0% { -webkit-transform: translate(-50%, -50%) rotate(0deg); }
         100% { -webkit-transform: translate(-50%, -50%) rotate(360deg); }
@@ -452,7 +446,6 @@ st.markdown(
         z-index: -1;
     }
 
-    /* STORY CARD BORDERS */
     div[data-testid="stColumn"]:has(.card-border-Nic),
     div[data-testid="stColumn"]:has(.card-border-Aryan),
     div[data-testid="stColumn"]:has(.card-border-Dillan),
@@ -482,7 +475,6 @@ st.markdown(
         margin-bottom: 4px;
     }
 
-    /* GAMING SPORTS CARD STYLING */
     .player-card-container {
         border-radius: 20px;
         padding: 20px;
@@ -519,7 +511,6 @@ st.markdown(
     .player-card-gamertag { font-weight: 900; line-height: 1.1; }
     .player-card-role { font-size: 0.78rem; font-weight: 800; opacity: 0.7; }
 
-    /* RESPONSIVE GRID SYSTEM & MEDIA QUERIES */
     .card-grid-3 {
         display: grid !important;
         grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)) !important;
@@ -670,7 +661,6 @@ def apply_balanced_chart_theme(fig):
 
 @st.cache_data
 def parse_uploaded_file(file):
-    """Parses uploaded CSV, Excel, JSON, Parquet, Text, or Image files into a Pandas DataFrame."""
     try:
         if hasattr(file, "seek"):
             file.seek(0)
@@ -731,7 +721,7 @@ def parse_uploaded_file(file):
         return None
 
 
-# GLOBAL SHARED STATE (For Sessions)
+# GLOBAL SHARED STATE
 @st.cache_resource
 def get_shared_state():
     return {"folders": {}, "active_sessions": set()}
@@ -749,7 +739,7 @@ def toggle_session_state(folder_name, session_name):
 
 
 # ==========================================
-# 🎛️ SESSION CONTROLS (COLLAPSIBLE TAB)
+# 🎛️ SESSION CONTROLS
 # ==========================================
 st.sidebar.markdown(
     """
@@ -761,7 +751,6 @@ st.sidebar.markdown(
     unsafe_allow_html=True,
 )
 
-# --- 1. CREATE NEW SESSION (FOLDER) ---
 st.sidebar.markdown("**Create New Session**")
 with st.sidebar.form("new_session_form", clear_on_submit=True):
     col_f1, col_f2 = st.columns([2.5, 1], vertical_alignment="bottom")
@@ -777,7 +766,6 @@ with st.sidebar.form("new_session_form", clear_on_submit=True):
 
 st.sidebar.divider()
 
-# --- 2. SESSIONS (ORGANIZATION & TOGGLES) ---
 st.sidebar.markdown("### 📂 Sessions")
 
 has_data = len(shared_state["folders"]) > 0
@@ -808,7 +796,6 @@ if has_data:
                             shared_state["folders"][folder_name][
                                 session_name
                             ] = parsed_df
-                            # Auto-activate newly uploaded files
                             shared_state["active_sessions"].add(
                                 (folder_name, session_name)
                             )
@@ -881,7 +868,7 @@ else:
     dataset_name = "No Active Session"
 
 # ==========================================
-# 3. PERFORMANCE TUNING & LIVE CALCULATIONS
+# PERFORMANCE TUNING & LIVE CALCULATIONS
 # ==========================================
 st.sidebar.markdown("### 🎯 Performance Tuning")
 score_quota = st.sidebar.number_input(
@@ -964,9 +951,7 @@ filtered_df = df.copy()
 for col in REQUIRED_METRICS:
     if col not in filtered_df.columns:
         filtered_df[col] = 0
-    filtered_df[col] = pd.to_numeric(filtered_df[col], errors="coerce").fillna(
-        0
-    )
+    filtered_df[col] = pd.to_numeric(filtered_df[col], errors="coerce").fillna(0)
 
 if "Team_Score" not in filtered_df.columns:
     filtered_df["Team_Score"] = (
@@ -1056,7 +1041,7 @@ st.markdown(
 
 
 def get_longest_dry_streak(df_in, player_prefix):
-    if is_zero_state:
+    if df_in is None or df_in.empty:
         return 0
     max_streak, current_streak = 0, 0
     for _, row in df_in.iterrows():
@@ -1132,7 +1117,7 @@ def render_download_image_button(container_id, filename):
 
 
 def generate_random_stat(data):
-    if is_zero_state:
+    if data is None or data.empty or is_zero_state:
         return "SELECT A SESSION IN THE SIDEBAR TO POPULATE MATCH STATS AND HIGHLIGHTS."
 
     players = ["Nic", "Aryan", "Dillan"]
@@ -1159,12 +1144,12 @@ def generate_random_stat(data):
     min_score_val = int(data[f"{min_score_p}_Score"].min())
 
     max_shots_no_goal = 0
-    brick_layer = "None"
+    brick_layer_tag = "A player"
     for p in players:
         no_goal_shots = data[data[f"{p}_Goals"] == 0][f"{p}_Shots"].max()
-        if not np.isnan(no_goal_shots) and no_goal_shots > max_shots_no_goal:
+        if pd.notna(no_goal_shots) and no_goal_shots > max_shots_no_goal:
             max_shots_no_goal = int(no_goal_shots)
-            brick_layer = players_meta[p]["tag"]
+            brick_layer_tag = players_meta[p]["tag"]
 
     best_acc_p = max(
         players,
@@ -1202,7 +1187,7 @@ def generate_random_stat(data):
         f"OFFENSIVE DROUGHT: <b>{players_meta['Nic']['tag']}</b> went on a <b>{nic_dry}</b> match goal drought streak!",
         f"BRICK LAYER: <b>{players_meta['Aryan']['tag']}</b> experienced a <b>{aryan_dry}</b> match dry streak without scoring!",
         f"GHOST MODE: <b>{players_meta['Dillan']['tag']}</b> went <b>{dillan_dry}</b> consecutive games firing shots into thin air with 0 goals!",
-        f"STORMTROOPER ACCURACY: <b>{brick_layer}</b> took <b>{max_shots_no_goal}</b> shots in a single game and scored absolutely ZERO goals!",
+        f"STORMTROOPER ACCURACY: <b>{brick_layer_tag}</b> took <b>{max_shots_no_goal}</b> shots in a single game and scored absolutely ZERO goals!",
         f"PERMANENT PASSENGER: <b>{players_meta[passenger_p]['tag']}</b> finished in last place on the squad <b>{p_3rd_counts[passenger_p]}</b> times!",
         f"PEAK SCORE: <b>{players_meta[max_score_p]['tag']}</b> erupted for a session peak score of <b>{max_score_val:,}</b> Pts in Game {max_score_game}!",
         f"SQUAD ERUPTION: The team combined for a massive session high of <b>{team_max_score:,}</b> total points!",
@@ -1615,7 +1600,8 @@ with tab_news:
 
     if not is_zero_state:
         peak_p = max(
-            ["Nic", "Aryan", "Dillan"], key=lambda p: filtered_df[f"{p}_Score"].max()
+            ["Nic", "Aryan", "Dillan"],
+            key=lambda p: filtered_df[f"{p}_Score"].max(),
         )
         peak_p_tag = players_meta[peak_p]["tag"]
         peak_score = int(filtered_df[f"{peak_p}_Score"].max())
@@ -1760,7 +1746,7 @@ with tab_news:
         story_body=f"The team dropped <b>{loss_pct:.1f}%</b> of matches in the current selection.",
     )
 
-# CONSOLIDATED PLAYER TABS W/ DROPDOWN
+# CONSOLIDATED PLAYER TABS
 with tab_playercard:
     st.markdown("### Player Select")
     selected_player = st.selectbox(
