@@ -1,3 +1,4 @@
+import os
 import random
 import re
 import numpy as np
@@ -103,7 +104,6 @@ def clean_and_normalize_dataframe(df):
         df = df.rename(columns=mapping)
 
     if "Win" in df.columns:
-
         def parse_win(val):
             if pd.isna(val):
                 return 0
@@ -114,13 +114,24 @@ def clean_and_normalize_dataframe(df):
 
         df["Win"] = df["Win"].apply(parse_win)
 
+    # Convert numeric values, but keep NaNs for filtering unplayed games
     for col in df.columns:
-        if col != "Source_Session":
+        if col != "Source_Session" and col != "Win":
             if df[col].dtype == object:
                 df[col] = (
                     df[col].astype(str).str.replace(",", "").str.strip()
                 )
-            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    # --- FILTER OUT UNPLAYED GAMES ---
+    # Drop rows where all the score columns are NaN (meaning the game wasn't played yet)
+    score_cols = [c for c in df.columns if "_Score" in c]
+    if score_cols:
+        df = df.dropna(subset=score_cols, how="all").reset_index(drop=True)
+
+    # Now fill any remaining NaNs (e.g., if one single stat was blank) with 0
+    df = df.fillna(0)
+    # ---------------------------------
 
     return df
 
@@ -660,35 +671,43 @@ def apply_balanced_chart_theme(fig):
 
 
 @st.cache_data
-def parse_uploaded_file(file):
+def parse_uploaded_file(file_or_path):
     try:
-        if hasattr(file, "seek"):
-            file.seek(0)
-        fname = file.name.lower()
+        if isinstance(file_or_path, str):
+            fname = file_or_path.lower()
+            file_obj = file_or_path
+            file_name = file_or_path
+        else:
+            if hasattr(file_or_path, "seek"):
+                file_or_path.seek(0)
+            fname = file_or_path.name.lower()
+            file_obj = file_or_path
+            file_name = file_or_path.name
+
         df_out = None
 
         if fname.endswith(".csv"):
-            df_out = pd.read_csv(file)
+            df_out = pd.read_csv(file_obj)
         elif fname.endswith((".tsv", ".txt")):
             try:
-                df_out = pd.read_csv(file, sep=None, engine="python")
+                df_out = pd.read_csv(file_obj, sep=None, engine="python")
             except Exception:
-                df_out = pd.read_csv(file)
+                df_out = pd.read_csv(file_obj)
         elif fname.endswith((".xlsx", ".xls", ".xlsm", ".xlsb")):
             try:
-                df_out = pd.read_excel(file, engine="openpyxl")
+                df_out = pd.read_excel(file_obj, engine="openpyxl")
             except Exception:
-                df_out = pd.read_excel(file)
+                df_out = pd.read_excel(file_obj)
         elif fname.endswith(".json"):
-            df_out = pd.read_json(file)
+            df_out = pd.read_json(file_obj)
         elif fname.endswith(".parquet"):
-            df_out = pd.read_parquet(file)
+            df_out = pd.read_parquet(file_obj)
         elif fname.endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp")):
             try:
                 import pytesseract
                 from PIL import Image
 
-                img = Image.open(file)
+                img = Image.open(file_obj)
                 text = pytesseract.image_to_string(img)
                 lines = [
                     line.strip() for line in text.split("\n") if line.strip()
@@ -706,18 +725,18 @@ def parse_uploaded_file(file):
                 pass
             if df_out is None:
                 st.warning(
-                    f"Uploaded image '{file.name}' received. To auto-extract metrics from images, ensure readable text or OCR support."
+                    f"Uploaded image '{file_name}' received. To auto-extract metrics from images, ensure readable text or OCR support."
                 )
                 return None
         else:
-            df_out = pd.read_csv(file)
+            df_out = pd.read_csv(file_obj)
 
         if df_out is not None:
             df_out = clean_and_normalize_dataframe(df_out)
         return df_out
 
     except Exception as e:
-        st.error(f"Error reading file '{file.name}': {e}")
+        st.error(f"Error reading file '{file_name}': {e}")
         return None
 
 
@@ -736,6 +755,17 @@ def toggle_session_state(folder_name, session_name):
         shared_state["active_sessions"].add((folder_name, session_name))
     else:
         shared_state["active_sessions"].discard((folder_name, session_name))
+
+
+# --- AUTO-LOAD SPECIFIC FILE ---
+DEFAULT_FILE = "100 game tracker_2.xlsx"
+if os.path.exists(DEFAULT_FILE) and "Auto-Tracker" not in shared_state["folders"]:
+    shared_state["folders"]["Auto-Tracker"] = {}
+    parsed_df = parse_uploaded_file(DEFAULT_FILE)
+    if parsed_df is not None:
+        shared_state["folders"]["Auto-Tracker"]["100 Game Tracker"] = parsed_df
+        shared_state["active_sessions"].add(("Auto-Tracker", "100 Game Tracker"))
+# --------------------------------
 
 
 # ==========================================
@@ -774,14 +804,17 @@ if has_data:
     for folder_name, files_dict in list(shared_state["folders"].items()):
         with st.sidebar.expander(f"📁 {folder_name}", expanded=True):
             st.caption("Drag & Drop match files here:")
+            
+            # Dynamic key prevents persistent uploader state from resurrecting deleted files
+            up_version = st.session_state.get(f"up_ver_{folder_name}", 0)
             uploaded_files = st.file_uploader(
                 f"Upload to {folder_name}",
                 accept_multiple_files=True,
                 label_visibility="collapsed",
-                key=f"up_{folder_name}",
+                key=f"up_{folder_name}_{up_version}",
             )
 
-            # ----- THE FIX IS HERE -----
+            # Process uploaded files and increment key version to reset widget
             if uploaded_files:
                 new_file_added = False
                 for file in uploaded_files:
@@ -802,11 +835,10 @@ if has_data:
                                 (folder_name, session_name)
                             )
                             new_file_added = True
-                            
-                # Trigger a rerun so the app immediately reflects the new data
+
                 if new_file_added:
+                    st.session_state[f"up_ver_{folder_name}"] = up_version + 1
                     st.rerun()
-            # ---------------------------
 
             if not files_dict:
                 st.caption("No files uploaded yet.")
@@ -816,6 +848,9 @@ if has_data:
                     use_container_width=True,
                 ):
                     del shared_state["folders"][folder_name]
+                    shared_state["active_sessions"] = {
+                        (f, s) for f, s in shared_state["active_sessions"] if f != folder_name
+                    }
                     st.rerun()
             else:
                 st.divider()
@@ -848,6 +883,10 @@ if has_data:
                         shared_state["active_sessions"].discard(
                             (folder_name, session_name)
                         )
+                        chk_key = f"chk_{folder_name}_{session_name}"
+                        if chk_key in st.session_state:
+                            del st.session_state[chk_key]
+                        st.session_state[f"up_ver_{folder_name}"] = up_version + 1
                         st.rerun()
 else:
     st.sidebar.caption("No active sessions created yet.")
