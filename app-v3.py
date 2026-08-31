@@ -13,11 +13,57 @@ def clean_and_normalize_dataframe(df):
     if df is None or df.empty:
         return df
 
+    # --- ADVANCED PARSING: Handle 2-row multi-headers (Original Excel Format) ---
+    # The original file has player gamertags as column names and stats in row index 0.
+    gamertags = ["Hughligan", "ShaggNazty5480", "ShagNasty37", "shagnasty37", "shaggnazty5480", "hughligan"]
+    if any(tag.lower() in [str(c).strip().lower() for c in df.columns] for tag in gamertags):
+        new_columns = []
+        current_player = None
+        
+        player_map = {
+            "hughligan": "Nic", 
+            "shaggnazty5480": "Aryan", 
+            "shagnasty37": "Dillan"
+        }
+        
+        for col in df.columns:
+            col_str = str(col).strip()
+            
+            # If the column name matches a known gamertag, update our active player focus
+            if col_str.lower() in player_map:
+                current_player = player_map[col_str.lower()]
+            
+            # Check row 0 to see what stat this column is actually holding
+            stat_val = str(df.iloc[0][col]).strip() if pd.notna(df.iloc[0][col]) else ""
+            
+            if current_player and stat_val and stat_val.lower() != "nan":
+                # Create the target format like "Nic_Score"
+                if stat_val.lower() == 'win' and "Win" not in new_columns:
+                    new_columns.append("Win")
+                elif stat_val.lower() in ['lose', 'ff victory', 'placements', 'day', 'game', 'win']:
+                    new_columns.append(f"{current_player}_{stat_val}")
+                else:
+                    new_columns.append(f"{current_player}_{stat_val.capitalize()}")
+            else:
+                new_columns.append(col_str)
+                
+        # If we successfully parsed player stats, apply them and drop the old header row
+        if any("_Score" in c or "_Goals" in c for c in new_columns):
+            df.columns = new_columns
+            df = df.drop(index=0).reset_index(drop=True)
+    # --- END ADVANCED PARSING ---
+
     # Ensure column names are strings and strip whitespace
     df.columns = [str(c).strip() for c in df.columns]
 
     mapping = {}
-    players = ["nic", "aryan", "dillan"]
+    
+    # Extended aliases to catch flattened files that use Gamertags instead of real names
+    player_aliases = {
+        "nic": "Nic", "hughligan": "Nic",
+        "aryan": "Aryan", "shaggnazty5480": "Aryan",
+        "dillan": "Dillan", "shagnasty37": "Dillan"
+    }
     stats = ["score", "goals", "assists", "saves", "shots"]
 
     for col in df.columns:
@@ -25,16 +71,18 @@ def clean_and_normalize_dataframe(df):
 
         # Check Win mapping
         if c_norm in ["win", "wins", "result", "outcome", "w_l", "w/l"]:
-            mapping[col] = "Win"
+            # Only map if we don't already have a Win column
+            if "Win" not in mapping.values() and "Win" not in df.columns:
+                mapping[col] = "Win"
             continue
 
         # Check Player Stat mappings
         matched = False
-        for p in players:
+        for alias, target_player in player_aliases.items():
             for s in stats:
-                target = f"{p.capitalize()}_{s.capitalize()}"
-                # Handle variations: nic_score, nic score, nicscore, score_nic
-                if c_norm in [f"{p}_{s}", f"{p}{s}", f"{s}_{p}"]:
+                target = f"{target_player}_{s.capitalize()}"
+                # Handle variations: hughligan_score, hughliganscore, score_nic
+                if c_norm in [f"{alias}_{s}", f"{alias}{s}", f"{s}_{alias}"]:
                     mapping[col] = target
                     matched = True
                     break
