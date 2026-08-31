@@ -8,6 +8,70 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 
+# Clean and normalize DataFrame columns and data types for Rocket League stats
+def clean_and_normalize_dataframe(df):
+    if df is None or df.empty:
+        return df
+
+    # Ensure column names are strings and strip whitespace
+    df.columns = [str(c).strip() for c in df.columns]
+
+    mapping = {}
+    players = ["nic", "aryan", "dillan"]
+    stats = ["score", "goals", "assists", "saves", "shots"]
+
+    for col in df.columns:
+        c_norm = re.sub(r"[\s_\-\.]+", "_", col.strip()).lower()
+
+        # Check Win mapping
+        if c_norm in ["win", "wins", "result", "outcome", "w_l", "w/l"]:
+            mapping[col] = "Win"
+            continue
+
+        # Check Player Stat mappings
+        matched = False
+        for p in players:
+            for s in stats:
+                target = f"{p.capitalize()}_{s.capitalize()}"
+                # Handle variations: nic_score, nic score, nicscore, score_nic
+                if c_norm in [f"{p}_{s}", f"{p}{s}", f"{s}_{p}"]:
+                    mapping[col] = target
+                    matched = True
+                    break
+            if matched:
+                break
+
+    if mapping:
+        df = df.rename(columns=mapping)
+
+    # Normalize Win column values
+    if "Win" in df.columns:
+
+        def parse_win(val):
+            if pd.isna(val):
+                return 0
+            s = str(val).strip().upper()
+            if s in ["1", "1.0", "TRUE", "T", "W", "WIN", "YES", "Y"]:
+                return 1
+            return 0
+
+        df["Win"] = df["Win"].apply(parse_win)
+
+    # Convert numeric columns safely
+    for col in df.columns:
+        if col != "Source_Session":
+            if df[col].dtype == object:
+                df[col] = (
+                    df[col]
+                    .astype(str)
+                    .str.replace(",", "")
+                    .str.strip()
+                )
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+
+    return df
+
+
 # Dynamic font size helper based on character count
 def get_dynamic_font_size(text):
     clean_text = re.sub(r"<[^<]+?>", "", text)
@@ -39,7 +103,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Custom Styling & CSS with Mobile/Tablet Responsive Enhancements & Permanent Dark Mode Support
+# Custom Styling & CSS
 st.markdown(
     """
 <style>
@@ -449,7 +513,6 @@ st.markdown(
         .stTabs [data-baseweb="tab-list"] { flex-direction: row !important; }
         .stTabs [data-baseweb="tab"] { flex: 1 1 45% !important; font-size: 0.8rem !important; }
         
-        /* SHUFFLE FEED MOBILE WRAP FIX - BORDER FILL */
         div[data-testid="stHorizontalBlock"]:has(.live-ticker-box-connected) {
             flex-direction: column !important;
             height: auto !important;
@@ -464,7 +527,7 @@ st.markdown(
         div[data-testid="stHorizontalBlock"]:has(.live-ticker-box-connected) .stButton > button {
             border-right: none !important;
             border-bottom: 1.5px solid #00A3FF !important;
-            border-radius: 9px 9px 0 0 !important; /* Fits perfectly inside the rounded border wrapper */
+            border-radius: 9px 9px 0 0 !important;
             width: 100% !important;
             height: 100% !important;
             min-height: 48px !important;
@@ -485,7 +548,6 @@ st.markdown(
             padding-bottom: 4px !important;
         }
 
-        /* FIX FOR THE STACK UP TAB ON MOBILE */
         .stack-up-grid {
             flex-direction: row !important;
             gap: 6px !important;
@@ -523,7 +585,6 @@ st.markdown(
         .stack-up-grid .stat-v-avg {
             font-size: 0.5rem !important;
         }
-        /* Scale down the points pill to fit better on mobile */
         .stack-up-grid span[style*="background: rgba(255, 215, 0, 0.15)"] {
             font-size: 0.55rem !important;
             padding: 2px 4px !important;
@@ -535,12 +596,14 @@ st.markdown(
 )
 
 
-# SIMPLIFIED, CLEAN CHART THEME helper (Removed cartesian axis calls to prevent 'undefined' text)
 def apply_balanced_chart_theme(fig):
     fig.update_layout(
         font=dict(color="#94a3b8", family="Inter, sans-serif", size=10),
         title_font=dict(
-            color="#FFFFFF", size=12, family="Rajdhani, sans-serif", weight="bold"
+            color="#FFFFFF",
+            size=12,
+            family="Rajdhani, sans-serif",
+            weight="bold",
         ),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
@@ -561,55 +624,74 @@ def apply_balanced_chart_theme(fig):
 def parse_uploaded_file(file):
     """Parses uploaded CSV, Excel, JSON, Parquet, Text, or Image files into a Pandas DataFrame."""
     try:
+        if hasattr(file, "seek"):
+            file.seek(0)
         fname = file.name.lower()
+        df_out = None
+
         if fname.endswith(".csv"):
-            return pd.read_csv(file)
+            df_out = pd.read_csv(file)
         elif fname.endswith((".tsv", ".txt")):
             try:
-                return pd.read_csv(file, sep=None, engine="python")
+                df_out = pd.read_csv(file, sep=None, engine="python")
             except Exception:
-                return pd.read_csv(file)
+                df_out = pd.read_csv(file)
         elif fname.endswith((".xlsx", ".xls", ".xlsm", ".xlsb")):
-            return pd.read_excel(file)
+            try:
+                df_out = pd.read_excel(file, engine="openpyxl")
+            except Exception:
+                df_out = pd.read_excel(file)
         elif fname.endswith(".json"):
-            return pd.read_json(file)
+            df_out = pd.read_json(file)
         elif fname.endswith(".parquet"):
-            return pd.read_parquet(file)
+            df_out = pd.read_parquet(file)
         elif fname.endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp")):
             try:
-                from PIL import Image
                 import pytesseract
+                from PIL import Image
+
                 img = Image.open(file)
                 text = pytesseract.image_to_string(img)
-                lines = [line.strip() for line in text.split("\n") if line.strip()]
+                lines = [
+                    line.strip() for line in text.split("\n") if line.strip()
+                ]
                 data_dict = {}
                 for line in lines:
-                    parts = re.split(r'[:,\t]+', line)
+                    parts = re.split(r"[:,\t]+", line)
                     if len(parts) >= 2:
                         key = parts[0].strip()
                         val = pd.to_numeric(parts[1].strip(), errors="ignore")
                         data_dict[key] = [val]
                 if data_dict:
-                    return pd.DataFrame(data_dict)
+                    df_out = pd.DataFrame(data_dict)
             except Exception:
                 pass
-            st.warning(f"Uploaded image '{file.name}' received. To auto-extract metrics from images, ensure readable text or OCR support.")
-            return None
+            if df_out is None:
+                st.warning(
+                    f"Uploaded image '{file.name}' received. To auto-extract metrics from images, ensure readable text or OCR support."
+                )
+                return None
         else:
-            return pd.read_csv(file)
+            df_out = pd.read_csv(file)
+
+        if df_out is not None:
+            df_out = clean_and_normalize_dataframe(df_out)
+        return df_out
+
     except Exception as e:
         st.error(f"Error reading file '{file.name}': {e}")
         return None
+
 
 # GLOBAL SHARED STATE (For Sessions)
 @st.cache_resource
 def get_shared_state():
     return {"folders": {}, "active_sessions": set()}
 
+
 shared_state = get_shared_state()
 
 
-# Helper callback function to toggle session state cleanly without double rerun crashes
 def toggle_session_state(folder_name, session_name):
     key = f"chk_{folder_name}_{session_name}"
     if st.session_state.get(key, False):
@@ -636,9 +718,7 @@ st.sidebar.markdown("**Create New Session**")
 with st.sidebar.form("new_session_form", clear_on_submit=True):
     col_f1, col_f2 = st.columns([2.5, 1], vertical_alignment="bottom")
     new_folder_name = col_f1.text_input(
-        "New Session Name", 
-        label_visibility="collapsed", 
-        placeholder="Name..."
+        "New Session Name", label_visibility="collapsed", placeholder="Name..."
     )
     add_submitted = col_f2.form_submit_button("Add", use_container_width=True)
     if add_submitted and new_folder_name.strip():
@@ -662,43 +742,69 @@ if has_data:
                 f"Upload to {folder_name}",
                 accept_multiple_files=True,
                 label_visibility="collapsed",
-                key=f"up_{folder_name}"
+                key=f"up_{folder_name}",
             )
-            
+
             if uploaded_files:
                 for file in uploaded_files:
-                    raw_name = file.name.rsplit(".", 1)[0].replace("_", " ").replace("-", " ")
+                    raw_name = (
+                        file.name.rsplit(".", 1)[0]
+                        .replace("_", " ")
+                        .replace("-", " ")
+                    )
                     session_name = raw_name.strip().title()
-                    
+
                     if session_name not in shared_state["folders"][folder_name]:
                         parsed_df = parse_uploaded_file(file)
                         if parsed_df is not None:
-                            shared_state["folders"][folder_name][session_name] = parsed_df
+                            shared_state["folders"][folder_name][
+                                session_name
+                            ] = parsed_df
+                            # Auto-activate newly uploaded files
+                            shared_state["active_sessions"].add(
+                                (folder_name, session_name)
+                            )
 
             if not files_dict:
                 st.caption("No files uploaded yet.")
-                if st.button("🗑️ Delete Session", key=f"del_f_{folder_name}", use_container_width=True):
+                if st.button(
+                    "🗑️ Delete Session",
+                    key=f"del_f_{folder_name}",
+                    use_container_width=True,
+                ):
                     del shared_state["folders"][folder_name]
                     st.rerun()
             else:
                 st.divider()
-                
+
                 for session_name in list(files_dict.keys()):
-                    col_check, col_del = st.columns([0.75, 0.25], vertical_alignment="center")
-                    
-                    is_active = (folder_name, session_name) in shared_state["active_sessions"]
-                    
+                    col_check, col_del = st.columns(
+                        [0.75, 0.25], vertical_alignment="center"
+                    )
+
+                    is_active = (
+                        folder_name,
+                        session_name,
+                    ) in shared_state["active_sessions"]
+
                     col_check.checkbox(
                         session_name,
                         value=is_active,
                         key=f"chk_{folder_name}_{session_name}",
                         on_change=toggle_session_state,
-                        args=(folder_name, session_name)
+                        args=(folder_name, session_name),
                     )
 
-                    if col_del.button("🗑️", key=f"del_{folder_name}_{session_name}", help=f"Remove {session_name}", use_container_width=True):
+                    if col_del.button(
+                        "🗑️",
+                        key=f"del_{folder_name}_{session_name}",
+                        help=f"Remove {session_name}",
+                        use_container_width=True,
+                    ):
                         del shared_state["folders"][folder_name][session_name]
-                        shared_state["active_sessions"].discard((folder_name, session_name))
+                        shared_state["active_sessions"].discard(
+                            (folder_name, session_name)
+                        )
                         st.rerun()
 else:
     st.sidebar.caption("No active sessions created yet.")
@@ -711,7 +817,10 @@ st.sidebar.divider()
 dataframes_to_combine = []
 
 for f_name, s_name in list(shared_state["active_sessions"]):
-    if f_name in shared_state["folders"] and s_name in shared_state["folders"][f_name]:
+    if (
+        f_name in shared_state["folders"]
+        and s_name in shared_state["folders"][f_name]
+    ):
         temp_df = shared_state["folders"][f_name][s_name].copy()
         temp_df["Source_Session"] = f"{f_name} - {s_name}"
         dataframes_to_combine.append(temp_df)
@@ -723,7 +832,6 @@ else:
     df = pd.DataFrame()
     dataset_name = "No Active Session"
 
-
 # ==========================================
 # 3. PERFORMANCE TUNING & LIVE CALCULATIONS
 # ==========================================
@@ -734,22 +842,29 @@ score_quota = st.sidebar.number_input(
     max_value=500,
     value=250,
     step=25,
-    help="Set the baseline score threshold."
+    help="Set the baseline score threshold.",
 )
 
 if not df.empty:
     quick_wins = df["Win"].sum() if "Win" in df.columns else 0
     quick_total_games = len(df)
-    quick_win_pct = (quick_wins / quick_total_games * 100) if quick_total_games > 0 else 0
-    
+    quick_win_pct = (
+        (quick_wins / quick_total_games * 100) if quick_total_games > 0 else 0
+    )
+
     if "Team_Score" not in df.columns:
-        if all(col in df.columns for col in ["Nic_Score", "Aryan_Score", "Dillan_Score"]):
-            df["Team_Score"] = df["Nic_Score"] + df["Aryan_Score"] + df["Dillan_Score"]
+        if all(
+            col in df.columns
+            for col in ["Nic_Score", "Aryan_Score", "Dillan_Score"]
+        ):
+            df["Team_Score"] = (
+                df["Nic_Score"] + df["Aryan_Score"] + df["Dillan_Score"]
+            )
         else:
             df["Team_Score"] = 0
-            
+
     quick_avg_score = df["Team_Score"].mean() if "Team_Score" in df.columns else 0
-    
+
     st.sidebar.markdown(
         f"""
         <div style="background: var(--secondary-background-color); padding: 12px; border-radius: 8px; border: 1px solid rgba(128,128,128,0.2); margin-top: 10px;">
@@ -767,8 +882,8 @@ if not df.empty:
                 <span style="color: #FF9100; font-weight: bold;">{quick_avg_score:.0f}</span>
             </div>
         </div>
-        """, 
-        unsafe_allow_html=True
+        """,
+        unsafe_allow_html=True,
     )
 
 REQUIRED_METRICS = [
@@ -801,9 +916,9 @@ filtered_df = df.copy()
 for col in REQUIRED_METRICS:
     if col not in filtered_df.columns:
         filtered_df[col] = 0
-    filtered_df[col] = pd.to_numeric(
-        filtered_df[col], errors="coerce"
-    ).fillna(0)
+    filtered_df[col] = pd.to_numeric(filtered_df[col], errors="coerce").fillna(
+        0
+    )
 
 if "Team_Score" not in filtered_df.columns:
     filtered_df["Team_Score"] = (
@@ -843,14 +958,14 @@ players_meta = {
     "Nic": {
         "tag": "Hughligan",
         "prefix": "Nic",
-        "color": "#00F0FF", # Touched up neon blue
+        "color": "#00F0FF",
         "complement": "#FF5B00",
         "role": "Player Card",
     },
     "Aryan": {
         "tag": "ShaggNazty5480",
         "prefix": "Aryan",
-        "color": "#FF003F", # More neon red
+        "color": "#FF003F",
         "complement": "#00E5FF",
         "role": "Player Card",
     },
@@ -879,9 +994,7 @@ active_wins = (
 active_win_pct = (
     (active_wins / total_active_games * 100) if total_active_games > 0 else 0
 )
-avg_team_score = (
-    0 if is_zero_state else filtered_df["Team_Score"].mean()
-)
+avg_team_score = 0 if is_zero_state else filtered_df["Team_Score"].mean()
 
 st.markdown(
     f"""
@@ -910,7 +1023,6 @@ def get_longest_dry_streak(df_in, player_prefix):
     return max_streak
 
 
-# DOWNLOAD TARGET IMAGE HELPER COMPONENT (HTML2CANVAS - CONVERTED TO JPEG)
 def render_download_image_button(container_id, filename):
     html_code = f"""
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -947,10 +1059,10 @@ def render_download_image_button(container_id, filename):
         if (!targetElement) return;
 
         html2canvas(targetElement, {{
-            backgroundColor: '#090e17', // Solid dark background for JPEG conversion
+            backgroundColor: '#090e17',
             useCORS: true,
             scale: 2,
-            windowWidth: 1400, // Explicitly locked to prevent Streamlit columns squishing on clone
+            windowWidth: 1400,
             onclone: function(clonedDoc) {{
                 const clonedTarget = clonedDoc.querySelector('{container_id}');
                 if (clonedTarget) {{
@@ -971,7 +1083,6 @@ def render_download_image_button(container_id, filename):
     components.html(html_code, height=60)
 
 
-# DYNAMIC GENERATOR: AT LEAST 25 RANDOM FUN FACTS (GOOD & BAD)
 def generate_random_stat(data):
     if is_zero_state:
         return "SELECT A SESSION IN THE SIDEBAR TO POPULATE MATCH STATS AND HIGHLIGHTS."
@@ -979,19 +1090,22 @@ def generate_random_stat(data):
     players = ["Nic", "Aryan", "Dillan"]
     p_rand = random.choice(players)
 
-    # Calculate local metrics from incoming DataFrame safe from global scope issues
     tot_active_games = len(data)
     wins = data["Win"].sum() if "Win" in data.columns else 0
     w_rate = (wins / tot_active_games * 100) if tot_active_games > 0 else 0
-    mean_team_score = data["Team_Score"].mean() if "Team_Score" in data.columns else 0
+    mean_team_score = (
+        data["Team_Score"].mean() if "Team_Score" in data.columns else 0
+    )
 
     nic_dry = get_longest_dry_streak(data, "Nic")
     aryan_dry = get_longest_dry_streak(data, "Aryan")
     dillan_dry = get_longest_dry_streak(data, "Dillan")
-    
+
     max_score_p = max(players, key=lambda p: data[f"{p}_Score"].max())
     max_score_val = int(data[f"{max_score_p}_Score"].max())
-    max_score_game = int(data.loc[data[f"{max_score_p}_Score"].idxmax(), "Session_Game"])
+    max_score_game = int(
+        data.loc[data[f"{max_score_p}_Score"].idxmax(), "Session_Game"]
+    )
 
     min_score_p = min(players, key=lambda p: data[f"{p}_Score"].min())
     min_score_val = int(data[f"{min_score_p}_Score"].min())
@@ -1004,8 +1118,19 @@ def generate_random_stat(data):
             max_shots_no_goal = int(no_goal_shots)
             brick_layer = players_meta[p]["tag"]
 
-    best_acc_p = max(players, key=lambda p: (data[f"{p}_Goals"].sum() / data[f"{p}_Shots"].sum()) if data[f"{p}_Shots"].sum() > 0 else 0)
-    best_acc_val = (data[f"{best_acc_p}_Goals"].sum() / data[f"{best_acc_p}_Shots"].sum() * 100) if data[f"{best_acc_p}_Shots"].sum() > 0 else 0
+    best_acc_p = max(
+        players,
+        key=lambda p: (
+            (data[f"{p}_Goals"].sum() / data[f"{p}_Shots"].sum())
+            if data[f"{p}_Shots"].sum() > 0
+            else 0
+        ),
+    )
+    best_acc_val = (
+        (data[f"{best_acc_p}_Goals"].sum() / data[f"{best_acc_p}_Shots"].sum() * 100)
+        if data[f"{best_acc_p}_Shots"].sum() > 0
+        else 0
+    )
 
     most_saves_p = max(players, key=lambda p: data[f"{p}_Saves"].sum())
     most_saves_val = int(data[f"{most_saves_p}_Saves"].sum())
@@ -1016,46 +1141,36 @@ def generate_random_stat(data):
     team_max_score = int(data["Team_Score"].max())
     team_min_score = int(data["Team_Score"].min())
     tot_team_goals = int(data["Team_Goals"].sum())
-    
-    # Ranks & MVPs
+
     match_scores = data[["Nic_Score", "Aryan_Score", "Dillan_Score"]].copy()
     ranks = match_scores.rank(axis=1, method="min", ascending=False)
     p_3rd_counts = {p: int((ranks[f"{p}_Score"] == 3).sum()) for p in players}
     p_mvp_counts = {p: int((ranks[f"{p}_Score"] == 1).sum()) for p in players}
-    
+
     passenger_p = max(p_3rd_counts, key=p_3rd_counts.get)
     mvp_king_p = max(p_mvp_counts, key=p_mvp_counts.get)
 
     pool = [
-        # 1-5 Dry Streaks / Funny Bads
         f"OFFENSIVE DROUGHT: <b>{players_meta['Nic']['tag']}</b> went on a <b>{nic_dry}</b> match goal drought streak!",
         f"BRICK LAYER: <b>{players_meta['Aryan']['tag']}</b> experienced a <b>{aryan_dry}</b> match dry streak without scoring!",
         f"GHOST MODE: <b>{players_meta['Dillan']['tag']}</b> went <b>{dillan_dry}</b> consecutive games firing shots into thin air with 0 goals!",
         f"STORMTROOPER ACCURACY: <b>{brick_layer}</b> took <b>{max_shots_no_goal}</b> shots in a single game and scored absolutely ZERO goals!",
         f"PERMANENT PASSENGER: <b>{players_meta[passenger_p]['tag']}</b> finished in last place on the squad <b>{p_3rd_counts[passenger_p]}</b> times!",
-
-        # 6-10 Highs & Peaks
         f"PEAK SCORE: <b>{players_meta[max_score_p]['tag']}</b> erupted for a session peak score of <b>{max_score_val:,}</b> Pts in Game {max_score_game}!",
         f"SQUAD ERUPTION: The team combined for a massive session high of <b>{team_max_score:,}</b> total points!",
         f"SNIPER ELITE: <b>{players_meta[best_acc_p]['tag']}</b> commands the team in goal conversion at <b>{best_acc_val:.1f}%</b> accuracy!",
         f"WALL OF CHINA: <b>{players_meta[most_saves_p]['tag']}</b> locked down the net with a total of <b>{most_saves_val}</b> saves!",
         f"PLAYMAKER SUPREME: <b>{players_meta[most_assists_p]['tag']}</b> dished out <b>{most_assists_val}</b> total assists to team mates!",
-
-        # 11-15 Lows & Shames
         f"CARRIED HARD: <b>{players_meta[min_score_p]['tag']}</b> registered a session low of just <b>{min_score_val:,}</b> points in a match!",
         f"SQUAD SLUMP: The squad suffered a combined total match low of only <b>{team_min_score:,}</b> points!",
         f"MISSING IN ACTION: <b>{players_meta[min_score_p]['tag']}</b> finished under {score_quota} points in multiple games!",
         f"HEAVY CARGO: <b>{players_meta[passenger_p]['tag']}</b> occupied the bottom of the scoreboard in <b>{(p_3rd_counts[passenger_p]/tot_active_games*100):.0f}%</b> of games!",
         f"DEFENSIVE LEAK: Squad allowed opponents to outscore them while holding a <b>{(100-w_rate):.1f}%</b> loss rate!",
-
-        # 16-20 Dynamic Good Stats
         f"MVP CROWN: <b>{players_meta[mvp_king_p]['tag']}</b> claimed top score MVP honors in <b>{p_mvp_counts[mvp_king_p]}</b> matches!",
         f"GOAL MACHINE: Squad racked up <b>{tot_team_goals}</b> total goals across <b>{tot_active_games}</b> matches!",
         f"DOMINANCE: Team boasts an impressive <b>{w_rate:.1f}%</b> win rate across active sessions!",
         f"HEAVY ARTILLERY: <b>{players_meta[p_rand]['tag']}</b> posted an average score of <b>{data[f'{p_rand}_Score'].mean():.1f}</b> Pts per game!",
         f"QUOTA BUSTER: <b>{players_meta[mvp_king_p]['tag']}</b> exceeded the {score_quota} Pts quota in <b>{int((data[f'{mvp_king_p}_Score'] >= score_quota).sum())}</b> matches!",
-
-        # 21-27 Fun Mix & Roster Trivia
         f"SAVING GRACE: <b>{players_meta['Dillan']['tag']}</b> logged an average of <b>{data['Dillan_Saves'].mean():.2f}</b> saves per game!",
         f"TARGET PRACTICE: <b>{players_meta['Nic']['tag']}</b> put <b>{int(data['Nic_Shots'].sum())}</b> total shots towards opponent net!",
         f"UNSELFISH PLAY: <b>{players_meta['Aryan']['tag']}</b> has a total assist count of <b>{int(data['Aryan_Assists'].sum())}</b>!",
@@ -1067,7 +1182,6 @@ def generate_random_stat(data):
     return random.choice(pool)
 
 
-# REUSABLE PLAYER CARD HTML GENERATOR
 def generate_player_card_html(
     player_key, df_data, target_quota, compiled_single_column=False
 ):
@@ -1076,20 +1190,36 @@ def generate_player_card_html(
     p_role = players_meta[player_key]["role"]
     p_initial = p_tag[0]
 
-    tot_score = 0 if is_zero_state else int(df_data[f"{player_key}_Score"].sum())
-    tot_goals = 0 if is_zero_state else int(df_data[f"{player_key}_Goals"].sum())
-    tot_assists = 0 if is_zero_state else int(df_data[f"{player_key}_Assists"].sum())
-    tot_saves = 0 if is_zero_state else int(df_data[f"{player_key}_Saves"].sum())
-    tot_shots = 0 if is_zero_state else int(df_data[f"{player_key}_Shots"].sum())
+    tot_score = (
+        0 if is_zero_state else int(df_data[f"{player_key}_Score"].sum())
+    )
+    tot_goals = (
+        0 if is_zero_state else int(df_data[f"{player_key}_Goals"].sum())
+    )
+    tot_assists = (
+        0 if is_zero_state else int(df_data[f"{player_key}_Assists"].sum())
+    )
+    tot_saves = (
+        0 if is_zero_state else int(df_data[f"{player_key}_Saves"].sum())
+    )
+    tot_shots = (
+        0 if is_zero_state else int(df_data[f"{player_key}_Shots"].sum())
+    )
 
     avg_score = 0.0 if is_zero_state else df_data[f"{player_key}_Score"].mean()
     avg_goals = 0.0 if is_zero_state else df_data[f"{player_key}_Goals"].mean()
-    avg_assists = 0.0 if is_zero_state else df_data[f"{player_key}_Assists"].mean()
+    avg_assists = (
+        0.0 if is_zero_state else df_data[f"{player_key}_Assists"].mean()
+    )
     avg_saves = 0.0 if is_zero_state else df_data[f"{player_key}_Saves"].mean()
     avg_shots = 0.0 if is_zero_state else df_data[f"{player_key}_Shots"].mean()
 
-    max_score = 0 if is_zero_state else int(df_data[f"{player_key}_Score"].max())
-    min_score = 0 if is_zero_state else int(df_data[f"{player_key}_Score"].min())
+    max_score = (
+        0 if is_zero_state else int(df_data[f"{player_key}_Score"].max())
+    )
+    min_score = (
+        0 if is_zero_state else int(df_data[f"{player_key}_Score"].min())
+    )
 
     shooting_avg = (tot_goals / tot_shots * 100) if tot_shots > 0 else 0.0
 
@@ -1188,15 +1318,38 @@ def generate_player_card_html(
     return card_html
 
 
-# REUSABLE TEAM CARD HTML GENERATOR
 def generate_team_card_html(df_data, target_quota):
     t_color = players_meta["Team"]["color"]
     t_tag = players_meta["Team"]["tag"]
 
-    tot_goals = 0 if is_zero_state else sum(df_data[f"{p}_Goals"].sum() for p in ["Nic", "Aryan", "Dillan"])
-    tot_assists = 0 if is_zero_state else sum(df_data[f"{p}_Assists"].sum() for p in ["Nic", "Aryan", "Dillan"])
-    tot_saves = 0 if is_zero_state else sum(df_data[f"{p}_Saves"].sum() for p in ["Nic", "Aryan", "Dillan"])
-    tot_shots = 0 if is_zero_state else sum(df_data[f"{p}_Shots"].sum() for p in ["Nic", "Aryan", "Dillan"])
+    tot_goals = (
+        0
+        if is_zero_state
+        else sum(
+            df_data[f"{p}_Goals"].sum() for p in ["Nic", "Aryan", "Dillan"]
+        )
+    )
+    tot_assists = (
+        0
+        if is_zero_state
+        else sum(
+            df_data[f"{p}_Assists"].sum() for p in ["Nic", "Aryan", "Dillan"]
+        )
+    )
+    tot_saves = (
+        0
+        if is_zero_state
+        else sum(
+            df_data[f"{p}_Saves"].sum() for p in ["Nic", "Aryan", "Dillan"]
+        )
+    )
+    tot_shots = (
+        0
+        if is_zero_state
+        else sum(
+            df_data[f"{p}_Shots"].sum() for p in ["Nic", "Aryan", "Dillan"]
+        )
+    )
 
     team_game_scores = (
         df_data["Nic_Score"]
@@ -1279,7 +1432,6 @@ def generate_team_card_html(df_data, target_quota):
     return card_html
 
 
-# RENDER INDIVIDUAL PLAYER TAB
 def render_player_tab(player_key, df_data, target_quota):
     card_html = generate_player_card_html(
         player_key, df_data, target_quota, compiled_single_column=False
@@ -1308,7 +1460,6 @@ def render_player_tab(player_key, df_data, target_quota):
 
     fig_p_radar = go.Figure()
 
-    # FIX: Combined fill, lines, markers, and text into a single cohesive trace
     fig_p_radar.add_trace(
         go.Scatterpolar(
             r=radar_values,
@@ -1347,7 +1498,7 @@ def render_player_tab(player_key, df_data, target_quota):
         ),
         template="plotly_dark",
         height=450,
-        margin=dict(l=35, r=35, t=30, b=30), # Reduced horizontal margin to fit mobile better
+        margin=dict(l=35, r=35, t=30, b=30),
     )
     fig_p_radar = apply_balanced_chart_theme(fig_p_radar)
     st.plotly_chart(
@@ -1355,7 +1506,7 @@ def render_player_tab(player_key, df_data, target_quota):
     )
 
 
-# MAIN NAVIGATION (Consolidated Tabs)
+# MAIN NAVIGATION
 (
     tab_news,
     tab_playercard,
@@ -1370,7 +1521,7 @@ def render_player_tab(player_key, df_data, target_quota):
     "Raw Data",
 ])
 
-# TAB 1: NEWS 
+# TAB 1: NEWS
 with tab_news:
     if "current_desk_stat" not in st.session_state:
         st.session_state.current_desk_stat = generate_random_stat(filtered_df)
@@ -1414,13 +1565,20 @@ with tab_news:
 
         render_live_ticker()
 
-    # BEST STAT COMPUTATION FOR FEATURED HEADLINE
     if not is_zero_state:
-        peak_p = max(["Nic", "Aryan", "Dillan"], key=lambda p: filtered_df[f"{p}_Score"].max())
+        peak_p = max(
+            ["Nic", "Aryan", "Dillan"], key=lambda p: filtered_df[f"{p}_Score"].max()
+        )
         peak_p_tag = players_meta[peak_p]["tag"]
         peak_score = int(filtered_df[f"{peak_p}_Score"].max())
-        peak_game = int(filtered_df.loc[filtered_df[f"{peak_p}_Score"].idxmax(), "Session_Game"])
-        featured_title = f"{peak_p_tag} Erupts For Session Record {peak_score:,} Pts!"
+        peak_game = int(
+            filtered_df.loc[
+                filtered_df[f"{peak_p}_Score"].idxmax(), "Session_Game"
+            ]
+        )
+        featured_title = (
+            f"{peak_p_tag} Erupts For Session Record {peak_score:,} Pts!"
+        )
         featured_desc = f"In Game {peak_game}, <b>{peak_p_tag}</b> delivered the highest single-game performance of the active session selection, securing <b>{peak_score:,}</b> points. Overall, the squad maintained a <b>{active_win_pct:.1f}%</b> win rate with <b>{int(filtered_df['Team_Goals'].sum())}</b> total goals."
     else:
         featured_title = "No Active Session Data Selected"
@@ -1444,7 +1602,6 @@ with tab_news:
         unsafe_allow_html=True,
     )
 
-    # RENDER STORY COLUMN WITHOUT GRAPHS
     def render_story_column(col, owner_key, badge_label, story_title, story_body):
         p_color = players_meta[owner_key]["color"]
         with col:
@@ -1464,7 +1621,9 @@ with tab_news:
 
     # ARYAN STORIES
     col_aryan_hi, col_aryan_lo = st.columns(2)
-    max_aryan_score = int(filtered_df["Aryan_Score"].max()) if not is_zero_state else 0
+    max_aryan_score = (
+        int(filtered_df["Aryan_Score"].max()) if not is_zero_state else 0
+    )
     dry_aryan = get_longest_dry_streak(filtered_df, "Aryan")
 
     render_story_column(
@@ -1484,9 +1643,17 @@ with tab_news:
 
     # NIC STORIES
     col_nic_hi, col_nic_lo = st.columns(2)
-    nic_goals_tot = int(filtered_df["Nic_Goals"].sum()) if not is_zero_state else 0
-    min_nic_score = int(filtered_df["Nic_Score"].min()) if not is_zero_state else 0
-    min_nic_game = filtered_df.loc[filtered_df["Nic_Score"].idxmin(), "Session_Game"] if not is_zero_state else 0
+    nic_goals_tot = (
+        int(filtered_df["Nic_Goals"].sum()) if not is_zero_state else 0
+    )
+    min_nic_score = (
+        int(filtered_df["Nic_Score"].min()) if not is_zero_state else 0
+    )
+    min_nic_game = (
+        filtered_df.loc[filtered_df["Nic_Score"].idxmin(), "Session_Game"]
+        if not is_zero_state
+        else 0
+    )
 
     render_story_column(
         col=col_nic_hi,
@@ -1525,7 +1692,9 @@ with tab_news:
 
     # TEAM STORIES
     col_team_hi, col_team_lo = st.columns(2)
-    max_team_score = int(filtered_df["Team_Score"].max()) if not is_zero_state else 0
+    max_team_score = (
+        int(filtered_df["Team_Score"].max()) if not is_zero_state else 0
+    )
     loss_pct = (100 - active_win_pct) if not is_zero_state else 0
 
     render_story_column(
@@ -1547,12 +1716,12 @@ with tab_news:
 with tab_playercard:
     st.markdown("### Player Select")
     selected_player = st.selectbox(
-        "Choose a player to view their card:", 
-        ["Hughligan", "ShaggNazty5480", "Shagnasty37"]
+        "Choose a player to view their card:",
+        ["Hughligan", "ShaggNazty5480", "Shagnasty37"],
     )
-    
+
     st.divider()
-    
+
     if selected_player == "Hughligan":
         render_player_tab("Nic", filtered_df, score_quota)
     elif selected_player == "ShaggNazty5480":
@@ -1560,7 +1729,7 @@ with tab_playercard:
     else:
         render_player_tab("Dillan", filtered_df, score_quota)
 
-# TAB 5: THE STACK UP 
+# TAB 5: THE STACK UP
 with tab_stackup:
     render_download_image_button("#stack-up-export", "stack_up_overview.jpeg")
 
@@ -1600,7 +1769,6 @@ with tab_stackup:
     fig_indiv_radar = go.Figure()
     indiv_max_val = 10
 
-    # Layer 1: Add all fill areas first so no trace fill covers another player's dots/lines
     for p_key in ["Nic", "Aryan", "Dillan"]:
         p_col = players_meta[p_key]["color"]
 
@@ -1624,7 +1792,6 @@ with tab_stackup:
             )
         )
 
-    # Layer 2: Add all lines and markers on top of all fills
     for p_key in ["Nic", "Aryan", "Dillan"]:
         p_tag = players_meta[p_key]["tag"]
         p_col = players_meta[p_key]["color"]
@@ -1670,11 +1837,10 @@ with tab_stackup:
         showlegend=False,
         template="plotly_dark",
         height=520,
-        margin=dict(l=35, r=35, t=40, b=40), # Reduced horizontal margins for better mobile scaling
+        margin=dict(l=35, r=35, t=40, b=40),
     )
     fig_indiv_radar = apply_balanced_chart_theme(fig_indiv_radar)
 
-    # CENTERED STACK UP RADAR DISPLAY
     col_r1, col_r2, col_r3 = st.columns([1, 10, 1])
     with col_r2:
         st.plotly_chart(
@@ -1683,7 +1849,7 @@ with tab_stackup:
             config={"displayModeBar": False},
         )
 
-# TAB 6: TEAM CARD 
+# TAB 6: TEAM CARD
 with tab_team:
     render_download_image_button("#team-export", "team_overview.jpeg")
 
@@ -1696,29 +1862,36 @@ with tab_team:
     """
     st.markdown(team_export_html, unsafe_allow_html=True)
 
-    # MOVED & CENTERED TEAM RADAR
     team_color = players_meta["Team"]["color"]
     radar_cats = ["Assists", "Goals", "Shots", "Saves", "Assists"]
 
     team_tot_a = (
         0
         if is_zero_state
-        else sum(filtered_df[f"{p}_Assists"].sum() for p in ["Nic", "Aryan", "Dillan"])
+        else sum(
+            filtered_df[f"{p}_Assists"].sum() for p in ["Nic", "Aryan", "Dillan"]
+        )
     )
     team_tot_g = (
         0
         if is_zero_state
-        else sum(filtered_df[f"{p}_Goals"].sum() for p in ["Nic", "Aryan", "Dillan"])
+        else sum(
+            filtered_df[f"{p}_Goals"].sum() for p in ["Nic", "Aryan", "Dillan"]
+        )
     )
     team_tot_sh = (
         0
         if is_zero_state
-        else sum(filtered_df[f"{p}_Shots"].sum() for p in ["Nic", "Aryan", "Dillan"])
+        else sum(
+            filtered_df[f"{p}_Shots"].sum() for p in ["Nic", "Aryan", "Dillan"]
+        )
     )
     team_tot_s = (
         0
         if is_zero_state
-        else sum(filtered_df[f"{p}_Saves"].sum() for p in ["Nic", "Aryan", "Dillan"])
+        else sum(
+            filtered_df[f"{p}_Saves"].sum() for p in ["Nic", "Aryan", "Dillan"]
+        )
     )
 
     team_radar_vals = [
@@ -1740,7 +1913,6 @@ with tab_team:
 
     fig_team_radar = go.Figure()
 
-    # FIX: Combined fill, lines, markers, and text into a single cohesive trace
     fig_team_radar.add_trace(
         go.Scatterpolar(
             r=team_radar_vals,
@@ -1780,7 +1952,7 @@ with tab_team:
         showlegend=False,
         template="plotly_dark",
         height=520,
-        margin=dict(l=35, r=35, t=40, b=40), # Reduced horizontal margins for mobile
+        margin=dict(l=35, r=35, t=40, b=40),
     )
     fig_team_radar = apply_balanced_chart_theme(fig_team_radar)
 
