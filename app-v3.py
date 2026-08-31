@@ -781,7 +781,9 @@ if has_data:
                 key=f"up_{folder_name}",
             )
 
+            # ----- THE FIX IS HERE -----
             if uploaded_files:
+                new_file_added = False
                 for file in uploaded_files:
                     raw_name = (
                         file.name.rsplit(".", 1)[0]
@@ -799,6 +801,12 @@ if has_data:
                             shared_state["active_sessions"].add(
                                 (folder_name, session_name)
                             )
+                            new_file_added = True
+                            
+                # Trigger a rerun so the app immediately reflects the new data
+                if new_file_added:
+                    st.rerun()
+            # ---------------------------
 
             if not files_dict:
                 st.caption("No files uploaded yet.")
